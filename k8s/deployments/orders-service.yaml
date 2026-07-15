@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: green-trade-orders-api
+  namespace: green-trade
+  labels:
+    app.kubernetes.io/name: green-trade
+    app.kubernetes.io/component: orders-api
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 4000
+  selector:
+    app.kubernetes.io/name: green-trade
+    app.kubernetes.io/component: orders-api

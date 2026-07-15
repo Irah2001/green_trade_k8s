@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: green-trade-catalog-api
+  namespace: green-trade
+  labels:
+    app.kubernetes.io/name: green-trade
+    app.kubernetes.io/component: catalog-api
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: green-trade
+      app.kubernetes.io/component: catalog-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: green-trade
+        app.kubernetes.io/component: catalog-api
+    spec:
+      containers:
+        - name: api
+          image: irah2001/greentrade-backend:v1.0.1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 4000
+          env:
+            - name: PORT
+              value: "4000"
+            - name: SERVICE_ROLE
+              value: catalog
+          envFrom:
+            - configMapRef:
+                name: green-trade-config
+            - secretRef:
+                name: green-trade-secrets
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 5

@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: green-trade-config
+  namespace: green-trade
+data:
+  NODE_ENV: production
+  LOG_FORMAT: "json"
+  API_URL: http://green-trade.local
+  FRONTEND_URL: http://green-trade.local
+  CORS_ORIGIN: http://green-trade.local
+  REDIS_URL: redis://green-trade-redis:6379
+  EMAIL_HOST: smtp-relay.brevo.com
+  EMAIL_PORT: "587"
+  STRIPE_API_VERSION: "2026-02-25.clover"
+  INTERNAL_API_URL: "http://backend-svc:4000"
+  NEXT_PUBLIC_API_URL: http://green-trade.local
