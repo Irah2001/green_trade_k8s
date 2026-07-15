@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: green-trade-api-servicemonitor
+  namespace: green-trade
+  labels:
+    release: monitoring
+spec:
+  selector:
+    matchExpressions:
+      - key: app.kubernetes.io/component
+        operator: In
+        values:
+          - catalog-api
+          - orders-api
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s

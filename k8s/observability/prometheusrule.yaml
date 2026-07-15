@@ -1,0 +1,43 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: green-trade-alerts
+  namespace: green-trade
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: green-trade-rules
+      rules:
+        - alert: BackendCatalogNoAvailableReplicas
+          expr: kube_deployment_status_replicas_available{namespace="green-trade", deployment="green-trade-catalog-api"} < 1
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Catalog API is unavailable"
+            description: "No available replica for green-trade-catalog-api for more than 1 minute."
+        - alert: BackendOrdersNoAvailableReplicas
+          expr: kube_deployment_status_replicas_available{namespace="green-trade", deployment="green-trade-orders-api"} < 1
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Orders API is unavailable"
+            description: "No available replica for green-trade-orders-api for more than 1 minute."
+        - alert: PodCrashLoopBackOff
+          expr: kube_pod_container_status_waiting_reason{namespace="green-trade", reason="CrashLoopBackOff"} > 0
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod {{ $labels.pod }} en CrashLoopBackOff"
+            description: "Le conteneur {{ $labels.container }} du pod {{ $labels.pod }} redémarre en boucle depuis plus de 2 minutes."
+        - alert: PodHighCPUUsage
+          expr: sum(rate(container_cpu_usage_seconds_total{namespace="green-trade", container!=""}[2m])) by (pod) / sum(kube_pod_container_resource_limits{namespace="green-trade", resource="cpu"}) by (pod) > 0.8
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High CPU Usage on Pod {{ $labels.pod }}"
+            description: "Pod {{ $labels.pod }} CPU usage is over 80% of its limit for more than 5 minutes."
