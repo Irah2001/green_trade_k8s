@@ -68,14 +68,20 @@ kubectl apply -f k8s/deployments/namespace.yaml
 
 # 2. Configuration et secrets (Variables d'environnement et DATABASE_URL)
 kubectl apply -f k8s/deployments/configmap.yaml
+kubectl apply -f k8s/secrets/secrets.yaml
 
 # 3. Déploiement du stockage et de l'infrastructure de données (MongoDB, Redis)
 kubectl apply -f k8s/deployments/mongo-services.yaml
 kubectl apply -f k8s/deployments/mongo-statefulset.yaml
 kubectl apply -f k8s/deployments/redis-deployment.yaml
+kubectl apply -f k8s/deployments/redis-service.yaml
 
 # 4. Déploiement des microservices applicatifs
-kubectl apply -f k8s/deployments/backend-deployment.yaml
+kubectl apply -f k8s/deployments/catalog-deployment.yaml
+kubectl apply -f k8s/deployments/catalog-service.yaml
+kubectl apply -f k8s/deployments/orders-deployment.yaml
+kubectl apply -f k8s/deployments/orders-service.yaml
+kubectl apply -f k8s/deployments/frontend-service.yaml
 kubectl apply -f k8s/deployments/frontend-deployment.yaml
 
 # 5. Configuration du routage réseau Ingress

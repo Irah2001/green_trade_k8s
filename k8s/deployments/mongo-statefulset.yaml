@@ -24,12 +24,13 @@ spec:
         runAsNonRoot: true
         runAsUser: 999
         fsGroup: 999
-        allowPrivilegeEscalation: false
-        seccompProfile:
-          type: RuntimeDefault
       containers:
         - name: mongo
           image: mongo:8.0
+          securityContext:
+            allowPrivilegeEscalation: false
+            seccompProfile:
+              type: RuntimeDefault
           imagePullPolicy: IfNotPresent
           command:
             - mongod

@@ -26,18 +26,19 @@ spec:
     spec:
       serviceAccountName: green-trade-app
       securityContext:
-        runAsNonRoot: true
-        runAsUser: 1000
         fsGroup: 1000
-        allowPrivilegeEscalation: false
-        seccompProfile:
-          type: RuntimeDefault
-        capabilities:
-          drop:
-            - ALL
+        runAsUser: 1000
+        runAsNonRoot: true
       containers:
         - name: api
           image: irah2001/greentrade-backend:v1.0.1
+          securityContext:
+            allowPrivilegeEscalation: false
+            seccompProfile:
+              type: RuntimeDefault
+            capabilities:
+              drop:
+                - ALL
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

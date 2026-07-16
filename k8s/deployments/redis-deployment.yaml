@@ -22,12 +22,13 @@ spec:
         runAsNonRoot: true
         runAsUser: 999
         fsGroup: 999
-        allowPrivilegeEscalation: false
-        seccompProfile:
-          type: RuntimeDefault
       containers:
         - name: redis
           image: redis:7.4-alpine
+          securityContext:
+            allowPrivilegeEscalation: false
+            seccompProfile:
+              type: RuntimeDefault
           imagePullPolicy: IfNotPresent
           ports:
             - name: redis
