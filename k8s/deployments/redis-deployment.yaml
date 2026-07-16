@@ -18,6 +18,13 @@ spec:
         app.kubernetes.io/name: green-trade
         app.kubernetes.io/component: redis
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        fsGroup: 999
+        allowPrivilegeEscalation: false
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: redis
           image: redis:7.4-alpine

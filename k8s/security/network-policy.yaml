@@ -1,0 +1,158 @@
+# 1. DENY ALL - Bloquer tout le trafic par défaut
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: green-trade
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+
+---
+
+# 2. Allow Ingress (Internet) -> Frontend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-frontend
+  namespace: green-trade
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: frontend
+  policyTypes:
+    - Ingress
+  ingress:
+    # Permettre le trafic du NGINX Ingress Controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 3000
+
+---
+
+# 3. Allow Frontend -> Catalog API & Orders API
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend-to-apis
+  namespace: green-trade
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: catalog-api
+  policyTypes:
+    - Ingress
+  ingress:
+    # Permettre le trafic du Frontend
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: frontend
+      ports:
+        - protocol: TCP
+          port: 4000
+
+---
+
+# 3b. Allow Frontend -> Orders API (même chose mais pour orders)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend-to-orders-api
+  namespace: green-trade
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: orders-api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: frontend
+      ports:
+        - protocol: TCP
+          port: 4000
+
+---
+
+# 4. Allow APIs -> MongoDB
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-apis-to-mongo
+  namespace: green-trade
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: mongo
+  policyTypes:
+    - Ingress
+  ingress:
+    # Permettre le trafic des deux APIs
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: catalog-api
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: orders-api
+      ports:
+        - protocol: TCP
+          port: 27017
+
+---
+
+# 5. Allow APIs -> Redis
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-apis-to-redis
+  namespace: green-trade
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: redis
+  policyTypes:
+    - Ingress
+  ingress:
+    # Permettre le trafic des deux APIs
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: catalog-api
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: orders-api
+      ports:
+        - protocol: TCP
+          port: 6379
+
+---
+
+# 6. Allow egress pour DNS (sinon les pods ne peuvent pas faire de requêtes DNS!)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+  namespace: green-trade
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    # DNS (UDP/TCP port 53)
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

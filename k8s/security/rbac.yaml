@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: green-trade-app
+  namespace: green-trade
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: green-trade-app
+  namespace: green-trade
+rules:
+  # Permet aux pods de lire leurs propres logs et infos
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+
+  # Permet de lire les ConfigMaps (configuration)
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list"]
+
+  # Permet de lire les Secrets (mais pas de les modifier)
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list"]
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: green-trade-app
+  namespace: green-trade
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: green-trade-app
+subjects:
+  - kind: ServiceAccount
+    name: green-trade-app
+    namespace: green-trade
