@@ -1,0 +1,153 @@
+name: CI/CD - Validate & Deploy
+
+# Déclencher la pipeline sur chaque push sur main
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  # Job 1 : Valider le formatage YAML
+  lint:
+    name: Lint YAML Manifests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install yamllint
+        run: pip install yamllint
+
+      - name: Run yamllint on k8s manifests
+        run: yamllint -d relaxed k8s/
+
+  # Job 2 : Valider la compatibilité Kubernetes
+  validate:
+    name: Validate Kubernetes Manifests
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install kubeval
+        run: |
+          wget https://github.com/instrumenta/kubeval/releases/latest/download/kubeval-linux-amd64.tar.gz
+          tar xf kubeval-linux-amd64.tar.gz
+          sudo mv kubeval /usr/local/bin/
+
+      - name: Validate all manifests
+        run: |
+          find k8s/ -name "*.yaml" -type f | while read file; do
+            echo "Validating $file..."
+            kubeval "$file" || exit 1
+          done
+
+  # Job 3 : Scanner les vulnérabilités de sécurité
+  security-scan:
+    name: Security Scan with kubesec
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install kubesec
+        run: |
+          wget https://github.com/controlplaneio/kubesec/releases/latest/download/kubesec_linux_amd64.tar.gz
+          tar xf kubesec_linux_amd64.tar.gz
+          sudo mv kubesec /usr/local/bin/
+
+      - name: Run kubesec scan
+        run: |
+          echo "Scanning for security issues..."
+          kubesec scan k8s/deployments/*.yaml k8s/security/*.yaml || true
+          # Note: `|| true` pour ne pas bloquer sur les avertissements bas niveau
+
+  # Job 4 : Déployer sur le cluster (uniquement sur main, pas sur PR)
+  deploy:
+    name: Deploy to Kubernetes Cluster
+    runs-on: ubuntu-latest
+    needs: [lint, validate, security-scan]
+    # Ne déployer que si c'est un push sur main, pas une PR
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup kubeconfig
+        run: |
+          # Créer le répertoire .kube
+          mkdir -p $HOME/.kube
+
+          # Décoder le secret GitHub et l'écrire dans kubeconfig
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+
+      - name: Verify cluster connection
+        run: kubectl cluster-info
+
+      - name: Apply Kubernetes manifests
+        run: |
+          echo "Deploying to green-trade namespace..."
+
+          # Appliquer dans l'ordre des dépendances
+          kubectl apply -f k8s/deployments/namespace.yaml
+          kubectl apply -f k8s/deployments/configmap.yaml
+          kubectl apply -f k8s/deployments/mongo-service.yaml
+          kubectl apply -f k8s/deployments/mongo-statefulset.yaml
+          kubectl apply -f k8s/deployments/redis-service.yaml
+          kubectl apply -f k8s/deployments/redis-deployment.yaml
+          kubectl apply -f k8s/deployments/catalog-service.yaml
+          kubectl apply -f k8s/deployments/catalog-deployment.yaml
+          kubectl apply -f k8s/deployments/orders-service.yaml
+          kubectl apply -f k8s/deployments/orders-deployment.yaml
+          kubectl apply -f k8s/deployments/frontend-service.yaml
+          kubectl apply -f k8s/deployments/frontend-deployment.yaml
+          kubectl apply -f k8s/deployments/ingress.yaml
+
+          # Appliquer la sécurité
+          kubectl apply -f k8s/security/rbac.yaml
+          kubectl apply -f k8s/security/network-policy.yaml
+
+          # Appliquer l'observabilité
+          kubectl apply -f k8s/observability/hpa-backend.yaml
+
+      - name: Wait for rollout
+        run: |
+          echo "Waiting for deployments to roll out..."
+          kubectl rollout status deployment/green-trade-frontend -n green-trade --timeout=5m
+          kubectl rollout status deployment/green-trade-catalog-api -n green-trade --timeout=5m
+          kubectl rollout status deployment/green-trade-orders-api -n green-trade --timeout=5m
+
+      - name: Verify deployment
+        run: |
+          echo "Verifying all pods are running..."
+          kubectl get pods -n green-trade
+
+          # Vérifier que tous les pods sont en Running
+          RUNNING=$(kubectl get pods -n green-trade -o jsonpath='{.items[?(@.status.phase=="Running")].metadata.name}' | wc -w)
+          TOTAL=$(kubectl get pods -n green-trade -o jsonpath='{.items[*].metadata.name}' | wc -w)
+
+          if [ $RUNNING -eq $TOTAL ]; then
+            echo "✅ All pods are running!"
+          else
+            echo "❌ Some pods are not running! ($RUNNING/$TOTAL)"
+            exit 1
+          fi
+
+      - name: Post-deployment checks
+        run: |
+          echo "Checking service connectivity..."
+          kubectl get svc -n green-trade
+          kubectl get networkpolicy -n green-trade
+          echo "✅ Deployment completed successfully!"

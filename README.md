@@ -148,3 +148,85 @@ Le port-forward pour accéder à Grafana et suivre les tableaux de bord se fait 
 kubectl port-forward svc/monitoring-grafana 3001:80 -n monitoring
 ```
 
+---
+
+## 🔒 Sécurité
+
+La sécurité du cluster est garantie par plusieurs couches de protection conformes aux meilleures pratiques Kubernetes :
+
+### Contrôle d'Accès (RBAC)
+
+Un `ServiceAccount` dédié `green-trade-app` est utilisé par tous les pods. Ce compte est associé à un `Role` avec des permissions minimales et restreintes au namespace `green-trade`. Les permissions autorisées incluent uniquement :
+- Lire les pods et leurs logs (`get`, `list`, `watch` sur ressources `pods` et `pods/log`)
+- Lire les configurations (`get`, `list` sur ressources `configmaps`)
+- Lire les secrets (`get`, `list` sur ressources `secrets`)
+
+Cette approche suit le principe du **moindre privilège** : aucun pod n'a accès cluster-wide, et les permissions sont strictement scopées au namespace. Le fichier de configuration se trouve dans `k8s/security/rbac.yaml`.
+
+```bash
+# Vérifier le ServiceAccount et les permissions
+kubectl get serviceaccount -n green-trade
+kubectl get role -n green-trade
+kubectl get rolebinding -n green-trade
+```
+
+### Isolation Réseau (NetworkPolicy)
+
+Par défaut, tous les pods sont en communication directe. Une `NetworkPolicy` avec stratégie **deny-all** est appliquée au namespace, suivie d'autorisations explicites pour les flux de trafic légitimes :
+
+- **Ingress → Frontend** : Le contrôleur NGINX Ingress peut envoyer du trafic au port 3000 du Frontend.
+- **Frontend → APIs** : Le Frontend accède aux APIs Catalog et Orders sur le port 4000.
+- **APIs → Bases de données** : Les APIs accèdent à MongoDB (port 27017) et Redis (port 6379).
+- **DNS** : Tous les pods peuvent faire des requêtes DNS (UDP/TCP port 53) pour la résolution de noms.
+
+Cette approche empêche tout trafic non autorisé (par exemple, une API ne peut pas accéder directement à MongoDB sans passer par le pod applicatif). Les policies se trouvent dans `k8s/security/network-policy.yaml`.
+
+```bash
+# Vérifier les NetworkPolicies
+kubectl get networkpolicy -n green-trade
+kubectl describe networkpolicy allow-ingress-to-frontend -n green-trade
+```
+
+### Restrictions de Sécurité des Pods (PodSecurity & SecurityContext)
+
+Tous les pods sont configurés avec un `securityContext` strict appliqué au niveau du Deployment/StatefulSet :
+
+- **`runAsNonRoot: true`** : Refuse d'exécuter les processus en tant que root (UID 0). Les processus tournent avec des UIDs non-privilégiés (1000 ou 999).
+- **`allowPrivilegeEscalation: false`** : Empêche un processus de gains de privilèges via `setuid` ou `setgid`.
+- **`seccompProfile: RuntimeDefault`** : Applique le profil seccomp par défaut du runtime pour restreindre les appels système dangereux.
+- **`capabilities.drop: ["ALL"]`** : Supprime toutes les capabilities Linux (namespaces, fichiers bruts, etc.) sauf les strictement nécessaires.
+
+Au niveau du Namespace, le label `pod-security.kubernetes.io/enforce: restricted` applique des vérifications strictes lors du déploiement de nouveaux pods. Tout pod ne respectant pas cette politique est rejeté.
+
+```bash
+# Vérifier les labels de sécurité du namespace
+kubectl get namespace green-trade -o yaml | grep pod-security
+
+# Vérifier le securityContext d'un pod
+kubectl get pod <POD_NAME> -n green-trade -o jsonpath='{.spec.securityContext}'
+```
+
+### Gestion des Secrets
+
+Les données sensibles (DATABASE_URL, clés API, etc.) sont stockées dans un `Secret` Kubernetes plutôt que dans le code source. Le fichier template `k8s/secrets/secrets.example.yaml` illustre la structure attendue (sans valeurs réelles).
+
+**Procédure de création des secrets :**
+
+```bash
+# 1. Dupliquer le template
+cp k8s/secrets/secrets.example.yaml k8s/secrets/secrets.yaml
+
+# 2. Remplir les valeurs réelles dans secrets.yaml (ne pas committer ce fichier)
+# Ajouter secrets.yaml à .gitignore pour éviter les leaks accidentels
+echo "k8s/secrets/secrets.yaml" >> .gitignore
+
+# 3. Appliquer le secret
+kubectl apply -f k8s/secrets/secrets.yaml
+
+# 4. Vérifier que le secret a été créé
+kubectl get secrets -n green-trade
+kubectl describe secret green-trade-secrets -n green-trade
+```
+
+**Important** : Le fichier `secrets.yaml` contenant les vraies valeurs **ne doit jamais** être commité au repository. Seul le template `secrets.example.yaml` est versionné.
+

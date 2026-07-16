@@ -20,6 +20,13 @@ spec:
         app.kubernetes.io/component: mongo
     spec:
       terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        fsGroup: 999
+        allowPrivilegeEscalation: false
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: mongo
           image: mongo:8.0

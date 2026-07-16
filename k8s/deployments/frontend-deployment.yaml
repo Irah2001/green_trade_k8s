@@ -24,6 +24,17 @@ spec:
         app.kubernetes.io/name: green-trade
         app.kubernetes.io/component: frontend
     spec:
+      serviceAccountName: green-trade-app
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        allowPrivilegeEscalation: false
+        seccompProfile:
+          type: RuntimeDefault
+        capabilities:
+          drop:
+            - ALL
       containers:
         - name: frontend
           image: irah2001/greentrade-front:v1.0.0

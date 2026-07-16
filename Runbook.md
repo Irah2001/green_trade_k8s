@@ -59,3 +59,75 @@ kubectl exec -it green-trade-mongo-0 -n green-trade -- rm /tmp/greentrade_backup
 
 echo "Restauration terminée avec succès !"
 ```
+
+### 🔄 3. Rollback et Récupération
+
+#### Annuler un déploiement défaillant (Rollback de Deployment)
+
+Si un nouveau déploiement introduit une régression ou instabilité, vous pouvez revenir à la version précédente sans perte de données :
+
+```bash
+# Consulter l'historique des déploiements
+kubectl rollout history deployment green-trade-catalog-api -n green-trade
+
+# Voir les détails d'une révision spécifique
+kubectl rollout history deployment green-trade-catalog-api -n green-trade --revision=2
+
+# Revenir à la révision précédente
+kubectl rollout undo deployment green-trade-catalog-api -n green-trade
+
+# Revenir à une révision spécifique
+kubectl rollout undo deployment green-trade-catalog-api -n green-trade --to-revision=2
+
+# Suivre la progression du rollback
+kubectl rollout status deployment green-trade-catalog-api -n green-trade
+```
+
+La même procédure s'applique aux autres Deployments (Frontend, Orders API) en remplaçant le nom du Deployment.
+
+#### Récupération après perte de NetworkPolicy
+
+Si une `NetworkPolicy` a été accidentellement supprimée et que le cluster se trouve dans un état d'isolation excessive :
+
+```bash
+# Réappliquer les policies de sécurité
+kubectl apply -f k8s/security/network-policy.yaml
+
+# Vérifier que les policies sont réinstallées
+kubectl get networkpolicy -n green-trade
+```
+
+#### Récupération après violation de PodSecurity
+
+Si le label `pod-security.kubernetes.io/enforce` a été modifié accidentellement et que les pods ne peuvent plus être déployés :
+
+```bash
+# Restaurer les labels de sécurité au niveau du namespace
+kubectl label namespace green-trade \
+  pod-security.kubernetes.io/enforce=restricted \
+  pod-security.kubernetes.io/audit=restricted \
+  pod-security.kubernetes.io/warn=restricted \
+  --overwrite
+```
+
+#### Inspection de la configuration de sécurité actuelle
+
+Pour diagnostiquer des problèmes de sécurité ou vérifier que le cluster respecte les standards :
+
+```bash
+# Vérifier le RBAC
+kubectl get serviceaccount -n green-trade
+kubectl get role -n green-trade
+kubectl describe rolebinding green-trade-app -n green-trade
+
+# Vérifier les NetworkPolicies
+kubectl get networkpolicy -n green-trade
+kubectl describe networkpolicy default-deny-all -n green-trade
+
+# Vérifier le PodSecurity du namespace
+kubectl get namespace green-trade -o jsonpath='{.metadata.labels}' | grep pod-security
+
+# Vérifier le securityContext d'un pod
+kubectl get pod <POD_NAME> -n green-trade -o jsonpath='{.spec.securityContext}'
+```
+
